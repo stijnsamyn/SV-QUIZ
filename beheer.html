@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beheer — Strafvordering Quiz</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root{
+  --accent: #2952cc; --accent-dark: #1d3a99;
+  --accent-soft: rgba(41,82,204,.08); --accent-soft-2: rgba(41,82,204,.16);
+  --bg: #f4f6f9; --surface: #fff; --surface2: #eef1f6;
+  --border: #dfe3ea; --text: #1c2433; --text-muted: #5b6472;
+  --correct: #16803d; --correct-soft: rgba(22,128,61,.09);
+  --wrong: #c0272d; --radius: 10px;
+  --shadow-sm: 0 1px 2px rgba(16,24,40,.05); --shadow-md: 0 4px 16px rgba(16,24,40,.06);
+}
+body{ font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:var(--bg); color:var(--text); }
+.wrap{ max-width:900px; margin:0 auto; padding:20px; }
+h1{ font-size:1.3rem; margin-bottom:4px; }
+.sub{ color:var(--text-muted); font-size:.85rem; margin-bottom:16px; }
+.panel{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-sm); padding:16px; margin-bottom:16px; }
+.searchbar{ display:flex; gap:8px; margin-bottom:12px; }
+.searchbar input{ flex:1; padding:10px 12px; border:1px solid var(--border); border-radius:var(--radius); font:inherit; }
+.qcard{ border:1px solid var(--border); border-radius:var(--radius); padding:14px; margin-bottom:12px; background:var(--surface); }
+.qcard.gewijzigd{ border-color:var(--accent); background:var(--accent-soft); }
+.qnum{ font-weight:700; color:var(--accent); font-size:.85rem; margin-bottom:6px; }
+.qtext{ font-size:.95rem; margin-bottom:10px; }
+.optrow{ display:flex; align-items:flex-start; gap:8px; padding:7px 10px; border-radius:8px; cursor:pointer; font-size:.9rem; }
+.optrow:hover{ background:var(--surface2); }
+.optrow.huidig{ font-weight:600; }
+.optrow input{ margin-top:2px; }
+.tag{ font-size:.7rem; padding:1px 7px; border-radius:99px; background:var(--correct-soft); color:var(--correct); border:1px solid var(--correct); margin-left:6px; white-space:nowrap; }
+.tag.nieuw{ background:var(--accent-soft-2); color:var(--accent-dark); border-color:var(--accent); }
+.uitleg-btn{ background:none; border:none; color:var(--accent); font-size:.8rem; cursor:pointer; margin-top:6px; padding:0; }
+.uitleg-veld{ width:100%; margin-top:8px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; font:inherit; font-size:.85rem; min-height:60px; display:none; }
+.sticky-out{ position:sticky; bottom:0; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius) var(--radius) 0 0; box-shadow:var(--shadow-md); padding:14px 16px; }
+.sticky-out h2{ font-size:.95rem; margin-bottom:8px; }
+.sticky-out .cnt{ color:var(--text-muted); font-weight:400; }
+.btnrow{ display:flex; gap:8px; flex-wrap:wrap; }
+.btn{ padding:9px 16px; border-radius:var(--radius); border:none; font:inherit; font-size:.88rem; font-weight:600; cursor:pointer; text-decoration:none; display:inline-block; }
+.btn-primary{ background:var(--accent); color:#fff; }
+.btn-primary:hover{ background:var(--accent-dark); }
+.btn-ghost{ background:var(--surface2); color:var(--text); border:1px solid var(--border); }
+.msg{ padding:12px; border-radius:var(--radius); background:var(--accent-soft); border:1px solid var(--accent); font-size:.88rem; margin-bottom:14px; }
+.err{ background:rgba(192,39,45,.08); border-color:var(--wrong); color:var(--wrong); }
+a{ color:var(--accent); }
+.stappen{ font-size:.82rem; color:var(--text-muted); line-height:1.6; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Beheer — antwoorden corrigeren</h1>
+  <div class="sub">De vragen staan in <b>vragen.js</b>. Klik hieronder het juiste antwoord aan en zet het bijgewerkte bestand op GitHub — de quiz zelf (index.html) hoef je nooit meer aan te raken.</div>
+
+  <div id="status" class="msg">Vragen laden…</div>
+
+  <div class="panel" id="zoekpaneel" style="display:none">
+    <div class="searchbar">
+      <input type="text" id="zoek" placeholder="Zoek op vraagnummer of trefwoord (bv. 239 of uitlevering)…" oninput="renderLijst()">
+    </div>
+    <div id="lijst"></div>
+  </div>
+
+  <div class="sticky-out" id="uitvoer" style="display:none">
+    <h2>Nieuwe vragen.js <span class="cnt" id="telling"></span></h2>
+    <div class="btnrow">
+      <button class="btn btn-primary" onclick="kopieer(this)">📋 Kopieer volledige vragen.js</button>
+      <a class="btn btn-ghost" id="ghlink" href="#" target="_blank">✏️ Open vragen.js op GitHub</a>
+    </div>
+    <div class="stappen" style="margin-top:8px">
+      1. Kopieer &nbsp;→&nbsp; 2. Open vragen.js op GitHub (bewerkmodus) &nbsp;→&nbsp; 3. Alles selecteren (Ctrl/Cmd-A), plakken &nbsp;→&nbsp; 4. <b>Commit changes</b>. De quiz gebruikt de correcties meteen.
+    </div>
+  </div>
+</div>
+
+<script>
+const REPO = "stijnsamyn/SV-QUIZ";
+let VRAGEN = [];        // geladen uit vragen.js (huidige staat op de site)
+let ORIGINEEL = {};     // n -> {c, uitleg} zoals geladen, om wijzigingen te tellen
+
+async function init(){
+  const st = document.getElementById('status');
+  try{
+    const res = await fetch('vragen.js?v=' + Date.now(), { cache:'no-store' });
+    if (!res.ok) throw new Error('vragen.js niet gevonden (status ' + res.status + ')');
+    const txt = await res.text();
+    const m = txt.match(/const ALL_QUESTIONS = (\[[\s\S]*\]);/);
+    if (!m) throw new Error('ALL_QUESTIONS niet gevonden in vragen.js');
+    VRAGEN = JSON.parse(m[1]);
+    VRAGEN.forEach(function(q){ ORIGINEEL[q.n] = { c: q.c, uitleg: q.uitleg || '' }; });
+  } catch(e){
+    st.className = 'msg err';
+    st.innerHTML = 'Kon vragen.js niet laden. Open deze pagina via de website (GitHub Pages), niet als lokaal bestand.<br><small>' + e.message + '</small>';
+    return;
+  }
+  st.style.display = 'none';
+  document.getElementById('zoekpaneel').style.display = 'block';
+  document.getElementById('uitvoer').style.display = 'block';
+  document.getElementById('ghlink').href = 'https://github.com/' + REPO + '/edit/main/vragen.js';
+  renderLijst();
+  renderTelling();
+}
+
+function isGewijzigd(q){
+  const o = ORIGINEEL[q.n];
+  return q.c !== o.c || (q.uitleg || '') !== o.uitleg;
+}
+
+function renderLijst(){
+  const term = document.getElementById('zoek').value.trim().toLowerCase();
+  let items;
+  if (term){
+    items = VRAGEN.filter(function(q){
+      return String(q.n) === term || q.q.toLowerCase().includes(term) || q.opts.some(function(o){ return o.toLowerCase().includes(term); });
+    });
+  } else {
+    items = VRAGEN.filter(isGewijzigd); // zonder zoekterm: enkel onbewaarde wijzigingen
+  }
+  const lijst = document.getElementById('lijst');
+  if (!items.length){
+    lijst.innerHTML = '<div class="stappen">' + (term ? 'Geen vragen gevonden.' : 'Nog geen wijzigingen. Zoek hierboven een vraag op nummer of trefwoord.') + '</div>';
+    return;
+  }
+  lijst.innerHTML = items.slice(0, 30).map(kaart).join('') + (items.length > 30 ? '<div class="stappen">… ' + (items.length - 30) + ' meer — verfijn je zoekopdracht.</div>' : '');
+}
+
+function kaart(q){
+  const gewijzigd = isGewijzigd(q);
+  let h = '<div class="qcard' + (gewijzigd ? ' gewijzigd' : '') + '">';
+  h += '<div class="qnum">Vraag ' + q.n + (gewijzigd ? ' <span class="tag nieuw">gewijzigd — nog niet op GitHub</span>' : '') + '</div>';
+  h += '<div class="qtext">' + esc(q.q) + '</div>';
+  q.opts.forEach(function(opt, i){
+    h += '<label class="optrow' + (i === q.c ? ' huidig' : '') + '">';
+    h += '<input type="radio" name="v' + q.n + '" ' + (i === q.c ? 'checked' : '') + ' onchange="kies(' + q.n + ',' + i + ')">';
+    h += '<span>' + (i + 1) + '. ' + esc(opt);
+    if (i === ORIGINEEL[q.n].c) h += '<span class="tag">huidig op site</span>';
+    h += '</span></label>';
+  });
+  h += '<button class="uitleg-btn" onclick="toonUitleg(this)">± uitleg aanpassen (optioneel)</button>';
+  h += '<textarea class="uitleg-veld" placeholder="Nieuwe uitleg voor deze vraag…" oninput="uitlegInput(' + q.n + ', this.value)"' + (q.uitleg ? ' style="display:block"' : '') + '>' + esc(q.uitleg || '') + '</textarea>';
+  h += '</div>';
+  return h;
+}
+
+function kies(n, i){
+  const q = VRAGEN.find(function(x){ return x.n === n; });
+  q.c = i;
+  renderLijst(); renderTelling();
+}
+function toonUitleg(btn){
+  const t = btn.parentNode.querySelector('.uitleg-veld');
+  t.style.display = (t.style.display === 'block') ? 'none' : 'block';
+  if (t.style.display === 'block') t.focus();
+}
+function uitlegInput(n, val){
+  const q = VRAGEN.find(function(x){ return x.n === n; });
+  val = val.trim();
+  if (val) q.uitleg = val; else delete q.uitleg;
+  renderTelling();
+}
+
+function maakVragenJs(){
+  const kop = [
+    '// Vragen van de Strafvordering Quiz — één vraag per lijn.',
+    '// Antwoord corrigeren: pas "c" aan (0 = eerste optie, 1 = tweede, ...) of gebruik beheer.html.',
+    '// Optioneel veld "uitleg" bij een vraag overschrijft de uitleg uit uitleg.js.',
+    'const ALL_QUESTIONS = ['
+  ];
+  const regels = VRAGEN.map(function(q, i){
+    return JSON.stringify(q) + (i < VRAGEN.length - 1 ? ',' : '');
+  });
+  return kop.concat(regels, ['];']).join('\n') + '\n';
+}
+
+function renderTelling(){
+  const cnt = VRAGEN.filter(isGewijzigd).length;
+  document.getElementById('telling').textContent = cnt ? '· ' + cnt + ' wijziging' + (cnt === 1 ? '' : 'en') : '· geen wijzigingen';
+}
+
+function kopieer(b){
+  navigator.clipboard.writeText(maakVragenJs()).then(function(){
+    const t = b.textContent;
+    b.textContent = '✅ Gekopieerd'; setTimeout(function(){ b.textContent = t; }, 1500);
+  });
+}
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+init();
+</script>
+</body>
+</html>
