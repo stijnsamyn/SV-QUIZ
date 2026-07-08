@@ -43,6 +43,8 @@ function srcBadge(kind, src){
 const esc = s => (s==null?"":String(s)).replace(/[&<>"']/g, c => (
   {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
 const letter = i => String.fromCharCode(65 + i);
+// Vertrouwde, door beheerders ingevoerde inhoud (uitleg, wettelijke basis, wettekst) mag als HTML.
+const html = s => (s==null?"":String(s));
 function fmtDate(d){ const x=new Date(d); return x.toLocaleDateString("nl-BE",{day:"numeric",month:"short",year:"numeric"})+" "+x.toLocaleTimeString("nl-BE",{hour:"2-digit",minute:"2-digit"}); }
 function toast(msg, kind){ const t=document.getElementById("toast"); t.className="toast "+(kind||""); t.textContent=msg; t.hidden=false; clearTimeout(t._t); t._t=setTimeout(()=>t.hidden=true, 3200); }
 function go(hash){ if(location.hash===hash) route(); else location.hash=hash; }
@@ -474,9 +476,9 @@ async function renderAfterAnswer(q){
   box.innerHTML=`
     ${q.validated===false?`<div class="notice">${ICON.info} <strong>Nog geen gevalideerd juist antwoord.</strong> Bekijk hieronder welk antwoord de groep verkiest, kies zelf je voorkeursantwoord en gebruik de flags om in overleg te gaan.</div>`:""}
     <div class="explain">
-      <span class="lbl">Uitleg ${srcBadge("Uitleg",q.explanation_source)}</span>${esc(q.explanation||"— geen uitleg —")}
-      ${q.legal_basis?`<div class="legal-inline"><strong>Wettelijke basis:</strong> ${esc(q.legal_basis)}</div>`:""}
-      ${q.wettekst?`<details class="wettekst-d"><summary>${ICON.info} Toon wettekst</summary><div class="wettekst">${esc(q.wettekst)}</div></details>`:""}
+      <span class="lbl">Uitleg ${srcBadge("Uitleg",q.explanation_source)}</span>${html(q.explanation||"— geen uitleg —")}
+      ${q.legal_basis?`<div class="legal-inline"><strong>Wettelijke basis:</strong> ${html(q.legal_basis)}</div>`:""}
+      ${q.wettekst?`<details class="wettekst-d"><summary>${ICON.info} Toon wettekst</summary><div class="wettekst">${html(q.wettekst)}</div></details>`:""}
     </div>
 
     <details><summary>${ICON.chat} Reageer op deze vraag</summary>
